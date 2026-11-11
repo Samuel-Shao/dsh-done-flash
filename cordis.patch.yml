@@ -1,0 +1,15 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack.
+# To change settings, add a top-level entry with the same id to the profile's
+# own cordis.patch.yml (without `insert:`) - inserting the same id twice fails
+# startup with "duplicate loader entry id".
+- insert:
+    - id: dsh-done-flash
+      name: 'dsh-done-flash'
+      # config:                    # every field is optional, defaults below
+      #   onlyWhenBackground: true # flash only when the app has no focused window
+      #   durationMs: 4000         # how long the flash lasts
+      #   intervalMs: 260          # half-period of the blink
+      #   style: ring              # ring | badge | invert | blink
+      #   accent: '#22C55E'        # highlight colour
+      #   skipSubagents: true      # ignore subagent turns
+      #   restoreOnLoad: true      # reset a stale icon left by a crashed flash

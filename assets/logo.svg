@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="dsh-done-flash">
+  <title>dsh-done-flash</title>
+  <defs>
+    <clipPath id="body">
+      <path d="M88 62c0-13-13-24-30-24S30 49 30 65c0 15 13 26 30 26 14 0 23-8 26-17 1-4 2-8 2-12z"/>
+    </clipPath>
+  </defs>
+  <rect x="3" y="3" width="122" height="122" rx="32" fill="#22C55E"/>
+  <rect x="13" y="13" width="102" height="102" rx="25" fill="#FBFCFE"/>
+  <!-- tail fin -->
+  <path d="M86 52c6-10 14-16 22-18-2 6-4 12-6 18 3 3 5 7 6 11-8-1-16-5-22-11z" fill="#1F2933"/>
+  <!-- body -->
+  <path d="M88 62c0-13-13-24-30-24S30 49 30 65c0 15 13 26 30 26 14 0 23-8 26-17 1-4 2-8 2-12z" fill="#1F2933"/>
+  <!-- belly -->
+  <g clip-path="url(#body)">
+    <path d="M26 70Q60 98 94 68" fill="none" stroke="#FBFCFE" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <!-- eye -->
+  <circle cx="50" cy="57" r="3.2" fill="#FBFCFE"/>
+</svg>

@@ -1,0 +1,55 @@
+{
+  "name": "dsh-done-flash",
+  "version": "0.1.0",
+  "description": "Flash the DeepSeek Harness tray whale when a task finishes while the app is in the background. Windows tray attention without a popup.",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "tray",
+    "notification",
+    "windows"
+  ],
+  "license": "MIT",
+  "author": "Samuel-Shao",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./tray-flash.ps1": "./lib/tray-flash.ps1",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE",
+    "assets",
+    "screenshots.json"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "dsh": ">=0.2.0-rc.1 <0.3.0",
+    "node": ">=22"
+  },
+  "os": [
+    "win32"
+  ],
+  "scripts": {
+    "test": "node test/plugin.test.mjs"
+  },
+  "icon": "assets/icon-180.png",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Samuel-Shao/dsh-done-flash.git"
+  },
+  "homepage": "https://github.com/Samuel-Shao/dsh-done-flash#readme",
+  "bugs": {
+    "url": "https://github.com/Samuel-Shao/dsh-done-flash/issues"
+  }
+}
