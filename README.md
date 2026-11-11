@@ -26,7 +26,7 @@ DSH only shows its window-level attention cues while the window is in front of y
 | | |
 | --- | --- |
 | OS | Windows 10 / 11 |
-| Host | DSH Desktop `>=0.2.0-rc.1 <0.3.0` |
+| Host | DSH Desktop `>=0.2.0-rc.1 <0.3.0 || >=0.2.2-rc.1 <0.3.0` |
 | Runtime | the Windows PowerShell 5.1 that ships with Windows (no download) |
 | Node | none at runtime — the plugin is dependency-free |
 
