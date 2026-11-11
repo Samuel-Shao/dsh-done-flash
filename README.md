@@ -2,13 +2,13 @@
 
 Flash the DeepSeek Harness **tray whale** when a task finishes while the app sits in the background.
 
-Windows has a hundred ways to nag you. This one is quiet: no popup, no sound, no toast that steals focus — the little whale in the system tray blinks green for a few seconds, then goes back to normal.
+Windows has a hundred ways to nag you. This one is quiet: no popup, no sound, no toast that steals focus — the little whale in the system tray blinks in and out for a few seconds, like a chat app nudging you, then goes back to normal.
 
 ```
-     ┌──────┐        ┌──────┐
-     │ 🐋   │  ⟶⟶⟶   │▓🐋▓ │
-     └──────┘        └──────┘
-      idle            done (ring style)
+     ┌──────┐        ┌──────┐        ┌──────┐
+     │ 🐋   │  ⟶⟶⟶   │      │  ⟶⟶⟶   │ 🐋   │
+     └──────┘        └──────┘        └──────┘
+      idle             blank          idle
 ```
 
 ## Why this plugin exists
@@ -19,7 +19,7 @@ DSH only shows its window-level attention cues while the window is in front of y
 
 - only when the DSH window is **not** in the foreground (configurable),
 - never for hidden sub-agent conversations (configurable),
-- with the whale still recognizable, not replaced by a generic badge.
+- with your own tray icon, never a generic badge, popup or toast.
 
 ## Requirements
 
@@ -60,8 +60,8 @@ Every key is optional — defaults are shown.
     onlyWhenBackground: true   # stay silent while the DSH window is focused
     skipSubagents: true        # ignore sub-agent conversations
     durationMs: 4000           # how long the flash runs
-    intervalMs: 260            # blink half-period
-    style: ring                # ring | badge | invert | blink
+    intervalMs: 460            # blink half-period (how long each state stays)
+    style: blink               # blink | ring | badge | invert
     accent: '#22C55E'          # any #RRGGBB
     iconPath: ''               # default: the app's own resources/tray.ico
     restoreOnLoad: true        # heal a stale flash icon after a crash
@@ -75,12 +75,12 @@ Add the block to `~/.dsh/profiles/<profile>/cordis.patch.yml` (top level, matchi
 
 | style | look |
 | --- | --- |
-| `ring` *(default)* | the whole tile turns accent-coloured, whale inset — impossible to miss |
+| `blink` *(default)* | the icon disappears and reappears — the familiar chat-app blink |
+| `ring` | the whole tile turns accent-coloured, whale inset — loudest, but recolours the tile |
 | `badge` | a filled dot in the bottom-right corner, whale untouched |
 | `invert` | whale silhouette recoloured in the accent colour |
-| `blink` | icon disappears and reappears (pure blink) |
 
-`accent: '#22C55E'` (green) means *finished*; use `#F59E0B` for amber, `#3B82F6` for blue.
+Only `ring`, `badge` and `invert` use `accent` (`#22C55E` green = finished; `#F59E0B` amber, `#3B82F6` blue also work). `blink` shows the untouched icon, so the accent does not apply.
 
 ## How it works
 

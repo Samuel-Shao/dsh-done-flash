@@ -61,7 +61,7 @@ if (result.skipped === 'foreground') {
   assert.equal(result.failed, 0, 'no failed icon updates')
   assert.ok(result.toggles >= 4, `expected several toggles, got ${result.toggles}`)
   assert.ok(Number.isInteger(result.uid), 'resolved a tray icon id')
-  assert.equal(result.style, 'ring')
+  assert.equal(result.style, 'blink')
 }
 
 rmSync(dir, { recursive: true, force: true })

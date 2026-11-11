@@ -2,13 +2,13 @@
 
 任务跑完时，让 DeepSeek Harness 的**托盘小鲸鱼闪一下**——前提是你正把 DSH 晾在后台。
 
-Windows 上打扰人的办法有一百种，这个插件选最安静的一种：不弹窗、不响铃、不抢焦点，托盘里的鲸鱼按完成色（默认绿色）闪几秒，然后自己复原。
+Windows 上打扰人的办法有一百种，这个插件选最安静的一种：不弹窗、不响铃、不抢焦点，托盘里的鲸鱼图标按"有/无"节奏闪几秒（就是微信那种闪法），然后自己复原。
 
 ```
-     ┌──────┐        ┌──────┐
-     │ 🐋   │  ⟶⟶⟶   │▓🐋▓ │
-     └──────┘        └──────┘
-      待机           完成（ring 样式）
+     ┌──────┐        ┌──────┐        ┌──────┐
+     │ 🐋   │  ⟶⟶⟶   │      │  ⟶⟶⟶   │ 🐋   │
+     └──────┘        └──────┘        └──────┘
+      待机            消失            待机
 ```
 
 ## 为什么需要它
@@ -19,7 +19,7 @@ DSH 的窗口级提示只在你盯着窗口时才看得见。你切到浏览器�
 
 - 只在 DSH 窗口**不在前台**时闪（可配置）；
 - 子智能体的隐藏会话不闪（可配置）；
-- 鲸鱼图案仍然可辨认，不是被一个通用角标顶掉。
+- 用的就是托盘里你自己的那个图标，不换角标、不弹通知。
 
 ## 环境要求
 
@@ -60,8 +60,8 @@ dsh plugin --profile desktop add link:F:\path\to\dsh-done-flash
     onlyWhenBackground: true   # DSH 窗口在前台时不闪
     skipSubagents: true        # 忽略子智能体会话
     durationMs: 4000           # 闪烁总时长
-    intervalMs: 260            # 半周期
-    style: ring                # ring | badge | invert | blink
+    intervalMs: 460            # 半周期（每个状态停留多久）
+    style: blink               # blink | ring | badge | invert
     accent: '#22C55E'          # 任意 #RRGGBB
     iconPath: ''               # 默认取应用自己的 resources/tray.ico
     restoreOnLoad: true        # 崩溃后自动修复残留的高亮图标
@@ -75,12 +75,12 @@ dsh plugin --profile desktop add link:F:\path\to\dsh-done-flash
 
 | 样式 | 效果 |
 | --- | --- |
-| `ring`（默认） | 整块变成完成色、鲸鱼缩进中间——最显眼 |
+| `blink`（默认） | 图标消失又出现——微信那种闪法，最像"提醒"而不像"报警" |
+| `ring` | 整块变成完成色、鲸鱼缩进中间——最显眼，但会改掉托盘图标配色 |
 | `badge` | 右下角一个实心圆点，鲸鱼不动 |
 | `invert` | 鲸鱼剪影改成完成色 |
-| `blink` | 图标消失/重现，纯闪 |
 
-`accent: '#22C55E'`（绿）表示"完成"；想用琥珀色写 `#F59E0B`，蓝色写 `#3B82F6`。
+只有 `ring`、`badge`、`invert` 用 `accent`（`#22C55E` 绿表示"完成"，也可用 `#F59E0B` 琥珀、`#3B82F6` 蓝）；`blink` 显示的是原图标，`accent` 不参与。
 
 ## 工作原理
 

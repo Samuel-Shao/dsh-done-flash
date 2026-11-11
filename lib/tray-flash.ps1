@@ -14,7 +14,7 @@ param(
   [string]$IconPath = '',
   [int]$DurationMs = 4000,
   [int]$IntervalMs = 260,
-  [string]$Style = 'badge',
+  [string]$Style = 'blink',
   [string]$Accent = 'FF4D4F',
   [switch]$RequireBackground,
   [int]$Uid = -1,
