@@ -2,7 +2,7 @@
 
 Flash the DeepSeek Harness **tray whale** when a task finishes while the app sits in the background.
 
-Windows has a hundred ways to nag you. This one is quiet: no popup, no sound, no toast that steals focus — the little whale in the system tray blinks in and out for a few seconds, like a chat app nudging you, then goes back to normal.
+Windows has a hundred ways to nag you. This one is quiet: no popup, no sound, no toast that steals focus — the little whale in the system tray blinks in and out, like a chat app nudging you, and keeps blinking until you bring DeepSeek Harness back to the front.
 
 ```
      ┌──────┐        ┌──────┐        ┌──────┐
@@ -59,15 +59,20 @@ Every key is optional — defaults are shown.
     enabled: true              # switch everything off without uninstalling
     onlyWhenBackground: true   # stay silent while the DSH window is focused
     skipSubagents: true        # ignore sub-agent conversations
-    durationMs: 4000           # how long the flash runs
+    untilForeground: true      # keep blinking until the app is brought to the front
+    maxDurationMs: 0           # safety cap for that mode; 0 = no cap
+    durationMs: 4000           # blink length when untilForeground is false
     intervalMs: 460            # blink half-period (how long each state stays)
     style: blink               # blink | ring | badge | invert
     accent: '#22C55E'          # any #RRGGBB
+    appTitle: 'DeepSeek Harness' # window title that also counts as "in front"
     iconPath: ''               # default: the app's own resources/tray.ico
     restoreOnLoad: true        # heal a stale flash icon after a crash
     logFile: ''                # default: $DSH_HOME/log/dsh-done-flash.log
     testOnLoad: false           # flash once 1.5 s after the plugin loads
 ```
+
+`untilForeground: true` is the default: the flash does not expire on its own, it stops as soon as the DeepSeek Harness window (or a browser tab titled `DeepSeek Harness`) is activated. Set `maxDurationMs` to e.g. `600000` if you want a hard ceiling, or `untilForeground: false` for a plain timed flash of `durationMs`.
 
 Add the block to `~/.dsh/profiles/<profile>/cordis.patch.yml` (top level, matching the entry id). Changing the config does not need a reinstall.
 
@@ -87,8 +92,9 @@ Only `ring`, `badge` and `invert` use `accent` (`#22C55E` green = finished; `#F5
 1. `session/event` with `type === 'turn/end'` fires in the host process.
 2. The plugin spawns `lib/tray-flash.ps1` hidden, passing the app's `resources/tray.ico`.
 3. The helper finds the Electron tray message window (`Electron_NotifyIconHostWindow`) that belongs to the desktop process, locates the whale's `uID` with `Shell_NotifyIconGetRect`, and reads the PNG frames out of `tray.ico` (the app stores all seven as PNG).
-4. It composites a highlighted twin at the exact DPI-matched size and alternates the two with `Shell_NotifyIcon(NIM_MODIFY)` for `durationMs`.
-5. It always restores the original icon on the way out — plus once at load, in case a previous run was killed mid-flash.
+4. It composites a highlighted twin at the exact DPI-matched size and alternates the two with `Shell_NotifyIcon(NIM_MODIFY)`.
+5. In the default `untilForeground` mode it checks `GetForegroundWindow` on every tick and stops the moment the app's own window — or a window titled `DeepSeek Harness` — is in front; otherwise it stops after `durationMs` (or `maxDurationMs`).
+6. It always restores the original icon on the way out — plus once at load, in case a previous run was killed mid-flash.
 
 No Electron API is touched: the tray icon is owned by the main process, and the plugin talks to the shell the same way the shell's own notification area does. Nothing is patched, nothing is injected into the renderer.
 
@@ -112,7 +118,7 @@ The test mounts the plugin on a fake context, emits `step/end` (must be ignored)
 ## Log
 
 ```json
-{"time":"2026-11-11T09:12:34.567Z","kind":"flash","reason":"turn/end","result":{"ok":true,"uid":3,"size":16,"dpi":96,"style":"ring","toggles":16,"failed":0}}
+{"time":"2026-11-11T09:12:34.567Z","kind":"flash","reason":"turn/end","mode":"until-foreground","result":{"ok":true,"mode":"until-foreground","reason":"foreground","elapsedMs":10648,"uid":3,"size":16,"dpi":96,"style":"blink","toggles":23,"failed":0}}
 ```
 
 `$DSH_HOME/log/dsh-done-flash.log`, one JSON object per line.

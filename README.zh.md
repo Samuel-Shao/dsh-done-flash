@@ -2,7 +2,7 @@
 
 任务跑完时，让 DeepSeek Harness 的**托盘小鲸鱼闪一下**——前提是你正把 DSH 晾在后台。
 
-Windows 上打扰人的办法有一百种，这个插件选最安静的一种：不弹窗、不响铃、不抢焦点，托盘里的鲸鱼图标按"有/无"节奏闪几秒（就是微信那种闪法），然后自己复原。
+Windows 上打扰人的办法有一百种，这个插件选最安静的一种：不弹窗、不响铃、不抢焦点，托盘里的鲸鱼图标按"有/无"节奏闪（就是微信那种闪法），**一直闪到你切回 DeepSeek Harness 为止**。
 
 ```
      ┌──────┐        ┌──────┐        ┌──────┐
@@ -59,15 +59,20 @@ dsh plugin --profile desktop add link:F:\path\to\dsh-done-flash
     enabled: true              # 总开关，关掉不必卸载
     onlyWhenBackground: true   # DSH 窗口在前台时不闪
     skipSubagents: true        # 忽略子智能体会话
-    durationMs: 4000           # 闪烁总时长
+    untilForeground: true      # 一直闪，直到把 DSH 切回前台
+    maxDurationMs: 0           # 该模式的兜底上限；0 = 不设上限
+    durationMs: 4000           # untilForeground 关闭时的固定时长
     intervalMs: 460            # 半周期（每个状态停留多久）
     style: blink               # blink | ring | badge | invert
     accent: '#22C55E'          # 任意 #RRGGBB
+    appTitle: 'DeepSeek Harness' # 标题含该字样的窗口也算"切回前台"
     iconPath: ''               # 默认取应用自己的 resources/tray.ico
     restoreOnLoad: true        # 崩溃后自动修复残留的高亮图标
     logFile: ''                # 默认 $DSH_HOME/log/dsh-done-flash.log
     testOnLoad: false           # 加载 1.5 秒后先闪一次做自检
 ```
+
+默认 `untilForeground: true`：闪烁不会自己超时，一旦检测到 DeepSeek Harness 窗口被激活（或切到标题含 `DeepSeek Harness` 的浏览器标签）就立刻停下并复原。想设兜底时长就填 `maxDurationMs`（毫秒，如 `600000`）；想回到固定时长闪烁就设 `untilForeground: false` 并调 `durationMs`。
 
 写在 `~/.dsh/profiles/<profile>/cordis.patch.yml` 顶层，用条目 id 匹配。改配置不需要重装。
 

@@ -18,7 +18,10 @@ param(
   [string]$Accent = 'FF4D4F',
   [switch]$RequireBackground,
   [int]$Uid = -1,
-  [switch]$RestoreOnly
+  [switch]$RestoreOnly,
+  [switch]$UntilForeground,
+  [string]$AppTitle = 'DeepSeek Harness',
+  [int]$MaxDurationMs = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -101,6 +104,28 @@ public static class DoneFlashTray {
   [DllImport("user32.dll", SetLastError=true)]
   public static extern bool IsIconic(IntPtr hWnd);
 
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  private static extern IntPtr CreateMutex(IntPtr attributes, bool initialOwner, string name);
+
+  [DllImport("kernel32.dll", SetLastError=true)]
+  private static extern bool ReleaseMutex(IntPtr handle);
+
+  private static IntPtr flashMutex = IntPtr.Zero;
+
+  // Only one helper may drive the tray icon at a time: two blinks running with
+  // opposite phases would look like a solid icon (or fight over the icon).
+  public static bool AcquireFlashSlot() {
+    flashMutex = CreateMutex(IntPtr.Zero, true, "Global\\dsh-done-flash-tray");
+    if (flashMutex == IntPtr.Zero) return false;
+    return Marshal.GetLastWin32Error() != 183; // ERROR_ALREADY_EXISTS
+  }
+
+  public static void ReleaseFlashSlot() {
+    if (flashMutex == IntPtr.Zero) return;
+    try { ReleaseMutex(flashMutex); } catch { }
+    flashMutex = IntPtr.Zero;
+  }
+
   private delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
 
   [DllImport("user32.dll")]
@@ -154,12 +179,49 @@ public static class DoneFlashTray {
     return Shell_NotifyIcon(1, ref n); // NIM_MODIFY
   }
 
+  // The tray slot grows with the display scale factor (48 px tall at 100 %,
+  // 96 px at 200 %). Measuring it tells us the bitmap size Explorer will
+  // actually draw, which a message-only tray window cannot report itself.
+  public static int IconSlot(IntPtr hwnd, uint uid, out int width, out int height) {
+    NII nii = new NII();
+    nii.cbSize = (uint)Marshal.SizeOf(typeof(NII));
+    nii.hWnd = hwnd;
+    nii.uID = uid;
+    RECT r;
+    int hr = Shell_NotifyIconGetRect(ref nii, out r);
+    width = r.Right - r.Left;
+    height = r.Bottom - r.Top;
+    return hr;
+  }
+
   public static uint ForegroundPid() {
     IntPtr fg = GetForegroundWindow();
     if (fg == IntPtr.Zero) return 0;
     uint pid;
     GetWindowThreadProcessId(fg, out pid);
     return pid;
+  }
+
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+  private static extern int GetWindowTextLength(IntPtr hWnd);
+
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+  private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int max);
+
+  // True when the window in front belongs to the app's process, or (for the
+  // browser-hosted Web UI) shows a title that carries the product name.
+  public static bool IsAppForeground(uint ownerPid, string titleNeedle) {
+    IntPtr fg = GetForegroundWindow();
+    if (fg == IntPtr.Zero) return false;
+    uint pid;
+    GetWindowThreadProcessId(fg, out pid);
+    if (ownerPid != 0 && pid == ownerPid) return true;
+    if (String.IsNullOrEmpty(titleNeedle)) return false;
+    int len = GetWindowTextLength(fg);
+    if (len <= 0) return false;
+    StringBuilder sb = new StringBuilder(len + 2);
+    GetWindowText(fg, sb, sb.Capacity);
+    return sb.ToString().IndexOf(titleNeedle, StringComparison.OrdinalIgnoreCase) >= 0;
   }
 }
 "@
@@ -178,7 +240,7 @@ public static class DoneFlashTray {
 
   if ($RequireBackground) {
     $fgPid = [DoneFlashTray]::ForegroundPid()
-    $sameApp = ($ownerPid -ne 0 -and $fgPid -eq $ownerPid) -or ($MainPid -gt 0 -and $fgPid -eq [uint32]$MainPid)
+    $sameApp = [DoneFlashTray]::IsAppForeground($ownerPid, $AppTitle) -or ($MainPid -gt 0 -and $fgPid -eq [uint32]$MainPid)
     if ($sameApp) {
       Write-Result @{ ok = $false; skipped = 'foreground'; foregroundPid = $fgPid; ownerPid = $ownerPid }
       exit 2
@@ -209,8 +271,20 @@ public static class DoneFlashTray {
     exit 0
   }
 
+  # ---- 2b. one blinker at a time -------------------------------------------
+  if (-not [DoneFlashTray]::AcquireFlashSlot()) {
+    [void][DoneFlashTray]::DestroyIcon($hBase)
+    Write-Result @{ ok = $false; skipped = 'already-running'; ownerPid = $ownerPid }
+    exit 5
+  }
+
   # ---- 3. pick the icon frame that matches the current DPI ----------------
-  $dpi = [DoneFlashTray]::GetDpiForWindow($hwnd)
+  # Scale from the measured tray slot: 48 px tall at 100 %, 96 px at 200 %.
+  $slotW = 0; $slotH = 0
+  $rectHr = [DoneFlashTray]::IconSlot($hwnd, [uint32]$target, [ref]$slotW, [ref]$slotH)
+  $dpi = 0
+  if ($rectHr -eq 0 -and $slotH -gt 0) { $dpi = [int][math]::Round(96 * $slotH / 48) }
+  if ($dpi -le 0) { $dpi = [DoneFlashTray]::GetDpiForWindow($hwnd) }
   if ($dpi -lt 96) { $dpi = 96 }
   $size = [int][math]::Round(16 * $dpi / 96)
   if ($size -lt 16) { $size = 16 }
@@ -285,13 +359,25 @@ public static class DoneFlashTray {
   $hBadge = $badge.GetHicon()
 
   # ---- 5. blink ------------------------------------------------------------
-  $deadline = (Get-Date).AddMilliseconds($DurationMs)
+  # Timed mode stops after DurationMs. UntilForeground mode keeps blinking
+  # until the app itself comes to the front (its own window, or a browser
+  # tab whose title carries the product name), optionally capped by
+  # MaxDurationMs as a safety net.
+  $started = Get-Date
+  $softDeadline = $started.AddMilliseconds($DurationMs)
+  $mode = if ($UntilForeground) { 'until-foreground' } else { 'timed' }
+  $reason = 'duration'
   $toggles = 0
   $failed = 0
+  $consecutiveFailures = 0
   $on = $true
-  while ((Get-Date) -lt $deadline) {
+  while ($true) {
+    if ($UntilForeground -and [DoneFlashTray]::IsAppForeground($ownerPid, $AppTitle)) { $reason = 'foreground'; break }
+    if (-not $UntilForeground -and (Get-Date) -ge $softDeadline) { $reason = 'duration'; break }
+    if ($MaxDurationMs -gt 0 -and ((Get-Date) - $started).TotalMilliseconds -ge $MaxDurationMs) { $reason = 'cap'; break }
     $ok = [DoneFlashTray]::SetIcon($hwnd, [uint32]$target, $(if ($on) { $hBadge } else { $hBase }))
-    if (-not $ok) { $failed++ }
+    if ($ok) { $consecutiveFailures = 0 } else { $failed++; $consecutiveFailures++ }
+    if ($consecutiveFailures -ge 5) { $reason = 'host-gone'; break }
     $toggles++
     $on = -not $on
     Start-Sleep -Milliseconds $IntervalMs
@@ -308,10 +394,14 @@ public static class DoneFlashTray {
     size = $work
     dpi = $dpi
     style = $Style
+    mode = $mode
+    reason = $reason
+    elapsedMs = [int]((Get-Date) - $started).TotalMilliseconds
     toggles = $toggles
     failed = $failed
     uids = $uids
     ownerPid = $ownerPid
+    foregroundPid = [DoneFlashTray]::ForegroundPid()
   }
   exit 0
 } catch {

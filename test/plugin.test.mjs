@@ -21,6 +21,7 @@ const ctx = {
 }
 
 mod.apply(ctx, {
+  untilForeground: false,
   durationMs: 1600,
   intervalMs: 220,
   restoreOnLoad: false,
