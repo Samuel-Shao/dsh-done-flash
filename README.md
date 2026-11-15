@@ -1,138 +1,140 @@
 # dsh-done-flash
 
-Flash the DeepSeek Harness **tray whale** when a task finishes while the app sits in the background.
+任务跑完时，让 DeepSeek Harness 的**托盘小鲸鱼闪一下**——前提是你正把 DSH 晾在后台，而且它会一直闪到你切回来为止。
 
-Windows has a hundred ways to nag you. This one is quiet: no popup, no sound, no toast that steals focus — the little whale in the system tray blinks in and out, like a chat app nudging you, and keeps blinking until you bring DeepSeek Harness back to the front.
+中文 · [English](README.en.md)
+
+Windows 上打扰人的办法有一百种，这个插件选最安静的一种：不弹窗、不响铃、不抢焦点，托盘里的鲸鱼图标按"有/无"节奏闪（就是微信那种闪法），**一直闪到你切回 DeepSeek Harness 为止**。
 
 ```
      ┌──────┐        ┌──────┐        ┌──────┐
      │ 🐋   │  ⟶⟶⟶   │      │  ⟶⟶⟶   │ 🐋   │
      └──────┘        └──────┘        └──────┘
-      idle             blank          idle
+      待机            消失            待机
 ```
 
-## Why this plugin exists
+## 为什么需要它
 
-DSH only shows its window-level attention cues while the window is in front of you. When you alt-tab to a browser and let an agent grind through a long task, nothing tells you it finished — you come back ten minutes later to a result that has been sitting there.
+DSH 的窗口级提示只在你盯着窗口时才看得见。你切到浏览器、让智能体去啃一个长任务，等回来时才发现结果已经躺了十分钟——中途没有任何信号。
 
-`dsh-done-flash` watches the session event stream, and on `turn/end` (a turn actually completed) lights up the tray icon:
+`dsh-done-flash` 监听会话事件流，在 `turn/end`（一轮真正结束）时点亮托盘图标：
 
-- only when the DSH window is **not** in the foreground (configurable),
-- never for hidden sub-agent conversations (configurable),
-- with your own tray icon, never a generic badge, popup or toast.
+- 只在 DSH 窗口**不在前台**时闪（可配置）；
+- 子智能体的隐藏会话不闪（可配置）；
+- 用的就是托盘里你自己的那个图标，不换角标、不弹通知。
 
-## Requirements
+## 环境要求
 
 | | |
 | --- | --- |
-| OS | Windows 10 / 11 |
-| Host | DSH Desktop `>=0.2.0-rc.1 <0.3.0 || >=0.2.2-rc.1 <0.3.0` |
-| Runtime | the Windows PowerShell 5.1 that ships with Windows (no download) |
-| Node | none at runtime — the plugin is dependency-free |
+| 操作系统 | Windows 10 / 11 |
+| 宿主 | DSH Desktop `>=0.2.0-rc.1 <0.3.0 \|\| >=0.2.2-rc.1 <0.3.0` |
+| 运行时 | 系统自带的 Windows PowerShell 5.1（无需下载） |
+| Node | 运行时零依赖 |
 
-Linux/macOS hosts are not supported (the package declares `"os": ["win32"]`).
+Linux / macOS 宿主不支持（包内声明 `"os": ["win32"]`）。
 
-## Install
+## 安装
 
-From the Web UI: **Settings → Plugins → Install** and point it at this package, or from a terminal:
+在 DSH 插件市场里搜 `dsh-done-flash` 直接安装；或从终端：
 
 ```sh
 dsh plugin --profile desktop add github:Samuel-Shao/dsh-done-flash
 ```
 
-Local checkout / development:
+本地目录 / 开发调试：
 
 ```sh
 dsh plugin --profile desktop add link:F:\path\to\dsh-done-flash
 ```
 
-After installation the plugin appears as the bundle `dsh-done-flash`; restart the app if the host reports `restart-required`.
+安装后插件以 bundle `dsh-done-flash` 出现；若宿主提示 `restart-required`，重启应用即可。
 
-## Configuration
+## 配置
 
-Every key is optional — defaults are shown.
+全部可选，下面是默认值。
 
 ```yaml
 - id: dsh-done-flash
   name: dsh-done-flash
   config:
-    enabled: true              # switch everything off without uninstalling
-    onlyWhenBackground: true   # stay silent while the DSH window is focused
-    skipSubagents: true        # ignore sub-agent conversations
-    untilForeground: true      # keep blinking until the app is brought to the front
-    maxDurationMs: 0           # safety cap for that mode; 0 = no cap
-    durationMs: 4000           # blink length when untilForeground is false
-    intervalMs: 460            # blink half-period (how long each state stays)
-    style: blink               # blink | ring | badge | invert
-    accent: '#22C55E'          # any #RRGGBB
-    appTitle: 'DeepSeek Harness' # window title that also counts as "in front"
-    iconPath: ''               # default: the app's own resources/tray.ico
-    restoreOnLoad: true        # heal a stale flash icon after a crash
-    logFile: ''                # default: $DSH_HOME/log/dsh-done-flash.log
-    testOnLoad: false           # flash once 1.5 s after the plugin loads
+    enabled: true                # 总开关，关掉不必卸载
+    onlyWhenBackground: true     # DSH 窗口在前台时不闪
+    skipSubagents: true          # 忽略子智能体会话
+    untilForeground: true        # 一直闪，直到把 DSH 切回前台
+    maxDurationMs: 0             # 该模式的兜底上限；0 = 不设上限
+    durationMs: 4000             # untilForeground 关闭时的固定时长
+    intervalMs: 460              # 半周期（每个状态停留多久）
+    style: blink                 # blink | ring | badge | invert
+    accent: '#22C55E'            # 任意 #RRGGBB
+    appTitle: 'DeepSeek Harness' # 标题含该字样的窗口也算"切回前台"
+    iconPath: ''                 # 默认取应用自己的 resources/tray.ico
+    restoreOnLoad: true          # 崩溃后自动修复残留的高亮图标
+    logFile: ''                  # 默认 $DSH_HOME/log/dsh-done-flash.log
+    testOnLoad: false            # 加载 1.5 秒后先闪一次做自检
 ```
 
-`untilForeground: true` is the default: the flash does not expire on its own, it stops as soon as the DeepSeek Harness window (or a browser tab titled `DeepSeek Harness`) is activated. Set `maxDurationMs` to e.g. `600000` if you want a hard ceiling, or `untilForeground: false` for a plain timed flash of `durationMs`.
+默认 `untilForeground: true`：闪烁不会自己超时，一旦检测到 DeepSeek Harness 窗口被激活（或切到标题含 `DeepSeek Harness` 的浏览器标签）就立刻停下并复原。想设兜底时长就填 `maxDurationMs`（毫秒，如 `600000`）；想回到固定时长闪烁就设 `untilForeground: false` 并调 `durationMs`。
 
-Add the block to `~/.dsh/profiles/<profile>/cordis.patch.yml` (top level, matching the entry id). Changing the config does not need a reinstall.
+写在 `~/.dsh/profiles/<profile>/cordis.patch.yml` 顶层，用条目 id 匹配。改配置不需要重装。
 
-### Styles
+### 样式
 
-| style | look |
+| 样式 | 效果 |
 | --- | --- |
-| `blink` *(default)* | the icon disappears and reappears — the familiar chat-app blink |
-| `ring` | the whole tile turns accent-coloured, whale inset — loudest, but recolours the tile |
-| `badge` | a filled dot in the bottom-right corner, whale untouched |
-| `invert` | whale silhouette recoloured in the accent colour |
+| `blink`（默认） | 图标消失又出现——微信那种闪法，最像"提醒"而不像"报警" |
+| `ring` | 整块变成完成色、鲸鱼缩进中间——最显眼，但会改掉托盘图标配色 |
+| `badge` | 右下角一个实心圆点，鲸鱼不动 |
+| `invert` | 鲸鱼剪影改成完成色 |
 
-Only `ring`, `badge` and `invert` use `accent` (`#22C55E` green = finished; `#F59E0B` amber, `#3B82F6` blue also work). `blink` shows the untouched icon, so the accent does not apply.
+只有 `ring`、`badge`、`invert` 用 `accent`（`#22C55E` 绿表示"完成"，也可用 `#F59E0B` 琥珀、`#3B82F6` 蓝）；`blink` 显示的是原图标，`accent` 不参与。
 
-## How it works
+## 工作原理
 
-1. `session/event` with `type === 'turn/end'` fires in the host process.
-2. The plugin spawns `lib/tray-flash.ps1` hidden, passing the app's `resources/tray.ico`.
-3. The helper finds the Electron tray message window (`Electron_NotifyIconHostWindow`) that belongs to the desktop process, locates the whale's `uID` with `Shell_NotifyIconGetRect`, and reads the PNG frames out of `tray.ico` (the app stores all seven as PNG).
-4. It composites a highlighted twin at the exact DPI-matched size and alternates the two with `Shell_NotifyIcon(NIM_MODIFY)`.
-5. In the default `untilForeground` mode it checks `GetForegroundWindow` on every tick and stops the moment the app's own window — or a window titled `DeepSeek Harness` — is in front; otherwise it stops after `durationMs` (or `maxDurationMs`).
-6. It always restores the original icon on the way out — plus once at load, in case a previous run was killed mid-flash.
+1. 宿主进程里收到 `session/event`，`type === 'turn/end'`。
+2. 插件以隐藏方式启动 `lib/tray-flash.ps1`，把应用的 `resources/tray.ico` 传进去。
+3. 助手脚本找到桌面进程的 Electron 托盘消息窗口（`Electron_NotifyIconHostWindow`），用 `Shell_NotifyIconGetRect` 定位鲸鱼的 `uID`，再从 `tray.ico` 里按偏移取出 PNG 帧（应用把 7 个尺寸全存成了 PNG）。
+4. 按**托盘槽位的实际尺寸**选帧（200% 缩放下就是 32px 那帧，而不是把 16px 放大），合成"消失"帧并交替下发。
+5. 每一拍都用 `GetForegroundWindow` 判断前台窗口是不是应用自己的窗口（或标题含 `DeepSeek Harness` 的浏览器标签）：是就立刻停止；否则继续闪。`maxDurationMs` 只在设了兜底上限时才参与。
+6. 退出前一定恢复原图标；加载时也会先恢复一次，防止上次被中断留下异常帧。
 
-No Electron API is touched: the tray icon is owned by the main process, and the plugin talks to the shell the same way the shell's own notification area does. Nothing is patched, nothing is injected into the renderer.
+不碰任何 Electron API：托盘图标归主进程所有，插件走的是系统通知区自己的那套消息，不 patch 任何文件、不往渲染进程注入代码。同一时刻只允许一个助手在闪（全局互斥量），不会出现两个进程互相抢图标。
 
-## Files
+## 文件
 
-| path | role |
+| 路径 | 作用 |
 | --- | --- |
-| `lib/index.js` | cordis plugin: event filter, debounce/queue, config, logging |
-| `lib/tray-flash.ps1` | Win32 helper: tray lookup, frame extraction, compositing, blink loop |
-| `test/plugin.test.mjs` | headless self-test with a fake `ctx` and a real flash |
+| `lib/index.js` | cordis 插件：事件过滤、合并排队、配置、日志 |
+| `lib/tray-flash.ps1` | Win32 助手：定位托盘、取帧、合成、闪烁循环 |
+| `test/plugin.test.mjs` | 假 ctx 的无头自测（会真的闪一次） |
 
-## Self-test
+## 自测
 
 ```sh
 node test/plugin.test.mjs
 # plugin self-test passed
 ```
 
-The test mounts the plugin on a fake context, emits `step/end` (must be ignored), a sub-agent `turn/end` (ignored), and a real `turn/end` (must flash), then prints the helper's JSON result.
+自测会挂一个假 ctx，依次发出 `step/end`（必须忽略）、子会话 `turn/end`（忽略）、真实 `turn/end`（必须闪），并打印助手脚本的 JSON 结果。
 
-## Log
+## 日志
 
 ```json
-{"time":"2026-11-11T09:12:34.567Z","kind":"flash","reason":"turn/end","mode":"until-foreground","result":{"ok":true,"mode":"until-foreground","reason":"foreground","elapsedMs":10648,"uid":3,"size":16,"dpi":96,"style":"blink","toggles":23,"failed":0}}
+{"time":"2026-11-11T11:53:49.394Z","kind":"flash","reason":"turn/end","mode":"timed","result":{"ok":true,"mode":"timed","reason":"duration","elapsedMs":3328,"uid":3,"size":32,"dpi":192,"style":"blink","toggles":7,"failed":0}}
 ```
 
-`$DSH_HOME/log/dsh-done-flash.log`, one JSON object per line.
+`$DSH_HOME/log/dsh-done-flash.log`，一行一个 JSON。`kind` 为 `loaded` / `flash` / `flash-merged` / `restore-on-load` / `restore-after-abort` 之一。
 
-## Troubleshooting
+## 排障
 
-**Nothing flashes.** Check the log first: `loaded` means the plugin runs, `flash` means it fired. `error: "icon-path-missing"` means `iconPath` could not be resolved — set it by hand. `uids: []` means the helper found no tray icon: the app tray may have been re-created, or DSH is running elevated/under another user.
+**完全不闪。** 先看日志：有 `loaded` 说明插件在跑，有 `flash` 说明触发过，`skipped: "foreground"` 说明当时 DSH 就在前台（这是预期行为）。`error: "icon-path-missing"` 表示 `iconPath` 没解析到，手动指定；`uids: []` 表示没找到托盘图标，可能托盘被重建、或 DSH 以更高权限/其他用户运行。
 
-**It flashes with the window in front.** Your foreground window is not considered the DSH main window (for example a fullscreen game or an elevated window). Set `onlyWhenBackground: false` to always flash, or ignore it.
+**窗口在前台也闪。** 你的前台窗口不被判定为 DSH 主窗口（例如全屏游戏、提权窗口）。不想管就设 `onlyWhenBackground: false`，或者忽略。
 
-**The icon got stuck highlighted.** `restoreOnLoad` repairs that at the next start; or `node -e "..."` — simpler: remove and re-add the bundle.
+**图标卡在消失状态。** 插件会在下次加载时自动恢复（`restore-on-load`）；助手被中断时也会主动复原（`restore-after-abort`）。若仍有残留，卸载重装即可。
 
-**Antivirus complains about PowerShell.** The helper only calls `shell32`/`user32` exports this Windows version already ships. If your policy blocks PowerShell scripts, the plugin cannot flash (there is no Node-only path to another process's tray icon).
+**杀软报警。** 助手只调用本系统自带的 `shell32`/`user32` 导出函数。如果策略禁止执行 PowerShell 脚本，插件无法工作——跨进程改别人的托盘图标没有纯 Node 的路子。
 
-## License
+## 许可证
 
-MIT.
+MIT。

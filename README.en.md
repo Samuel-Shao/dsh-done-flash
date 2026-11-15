@@ -1,0 +1,140 @@
+# dsh-done-flash
+
+Flash the DeepSeek Harness **tray whale** when a task finishes while the app sits in the background.
+
+[中文](README.md) · English
+
+Windows has a hundred ways to nag you. This one is quiet: no popup, no sound, no toast that steals focus — the little whale in the system tray blinks in and out, like a chat app nudging you, and keeps blinking until you bring DeepSeek Harness back to the front.
+
+```
+     ┌──────┐        ┌──────┐        ┌──────┐
+     │ 🐋   │  ⟶⟶⟶   │      │  ⟶⟶⟶   │ 🐋   │
+     └──────┘        └──────┘        └──────┘
+      idle             blank          idle
+```
+
+## Why this plugin exists
+
+DSH only shows its window-level attention cues while the window is in front of you. When you alt-tab to a browser and let an agent grind through a long task, nothing tells you it finished — you come back ten minutes later to a result that has been sitting there.
+
+`dsh-done-flash` watches the session event stream, and on `turn/end` (a turn actually completed) lights up the tray icon:
+
+- only when the DSH window is **not** in the foreground (configurable),
+- never for hidden sub-agent conversations (configurable),
+- with your own tray icon, never a generic badge, popup or toast.
+
+## Requirements
+
+| | |
+| --- | --- |
+| OS | Windows 10 / 11 |
+| Host | DSH Desktop `>=0.2.0-rc.1 <0.3.0 || >=0.2.2-rc.1 <0.3.0` |
+| Runtime | the Windows PowerShell 5.1 that ships with Windows (no download) |
+| Node | none at runtime — the plugin is dependency-free |
+
+Linux/macOS hosts are not supported (the package declares `"os": ["win32"]`).
+
+## Install
+
+From the Web UI: **Settings → Plugins → Install** and point it at this package, search `dsh-done-flash` in the plugin marketplace, or from a terminal:
+
+```sh
+dsh plugin --profile desktop add github:Samuel-Shao/dsh-done-flash
+```
+
+Local checkout / development:
+
+```sh
+dsh plugin --profile desktop add link:F:\path\to\dsh-done-flash
+```
+
+After installation the plugin appears as the bundle `dsh-done-flash`; restart the app if the host reports `restart-required`.
+
+## Configuration
+
+Every key is optional — defaults are shown.
+
+```yaml
+- id: dsh-done-flash
+  name: dsh-done-flash
+  config:
+    enabled: true                # switch everything off without uninstalling
+    onlyWhenBackground: true     # stay silent while the DSH window is focused
+    skipSubagents: true          # ignore sub-agent conversations
+    untilForeground: true        # keep blinking until the app is brought to the front
+    maxDurationMs: 0             # safety cap for that mode; 0 = no cap
+    durationMs: 4000             # blink length when untilForeground is false
+    intervalMs: 460              # blink half-period (how long each state stays)
+    style: blink                 # blink | ring | badge | invert
+    accent: '#22C55E'            # any #RRGGBB
+    appTitle: 'DeepSeek Harness' # window title that also counts as "in front"
+    iconPath: ''                 # default: the app's own resources/tray.ico
+    restoreOnLoad: true          # heal a stale flash icon after a crash
+    logFile: ''                  # default: $DSH_HOME/log/dsh-done-flash.log
+    testOnLoad: false            # flash once 1.5 s after the plugin loads
+```
+
+`untilForeground: true` is the default: the flash does not expire on its own, it stops as soon as the DeepSeek Harness window (or a browser tab titled `DeepSeek Harness`) is activated. Set `maxDurationMs` to e.g. `600000` if you want a hard ceiling, or `untilForeground: false` for a plain timed flash of `durationMs`.
+
+Add the block to `~/.dsh/profiles/<profile>/cordis.patch.yml` (top level, matching the entry id). Changing the config does not need a reinstall.
+
+### Styles
+
+| style | look |
+| --- | --- |
+| `blink` *(default)* | the icon disappears and reappears — the familiar chat-app blink |
+| `ring` | the whole tile turns accent-coloured, whale inset — loudest, but recolours the tile |
+| `badge` | a filled dot in the bottom-right corner, whale untouched |
+| `invert` | whale silhouette recoloured in the accent colour |
+
+Only `ring`, `badge` and `invert` use `accent` (`#22C55E` green = finished; `#F59E0B` amber, `#3B82F6` blue also work). `blink` shows the untouched icon, so the accent does not apply.
+
+## How it works
+
+1. `session/event` with `type === 'turn/end'` fires in the host process.
+2. The plugin spawns `lib/tray-flash.ps1` hidden, passing the app's `resources/tray.ico`.
+3. The helper finds the Electron tray message window (`Electron_NotifyIconHostWindow`) that belongs to the desktop process, locates the whale's `uID` with `Shell_NotifyIconGetRect`, and reads the PNG frames out of `tray.ico` (the app stores all seven as PNG).
+4. It composites a highlighted twin at the exact DPI-matched size and alternates the two with `Shell_NotifyIcon(NIM_MODIFY)`.
+5. In the default `untilForeground` mode it checks `GetForegroundWindow` on every tick and stops the moment the app's own window — or a window titled `DeepSeek Harness` — is in front; otherwise it stops after `durationMs` (or `maxDurationMs`).
+6. It always restores the original icon on the way out — plus once at load, in case a previous run was killed mid-flash.
+
+No Electron API is touched: the tray icon is owned by the main process, and the plugin talks to the shell the same way the shell's own notification area does. Nothing is patched, nothing is injected into the renderer. Only one helper may run at a time (a global mutex), so two flashes can never fight over the icon.
+
+## Files
+
+| path | role |
+| --- | --- |
+| `lib/index.js` | cordis plugin: event filter, debounce/queue, config, logging |
+| `lib/tray-flash.ps1` | Win32 helper: tray lookup, frame extraction, compositing, blink loop |
+| `test/plugin.test.mjs` | headless self-test with a fake `ctx` and a real flash |
+
+## Self-test
+
+```sh
+node test/plugin.test.mjs
+# plugin self-test passed
+```
+
+The test mounts the plugin on a fake context, emits `step/end` (must be ignored), a sub-agent `turn/end` (ignored), and a real `turn/end` (must flash), then prints the helper's JSON result.
+
+## Log
+
+```json
+{"time":"2026-11-11T09:12:34.567Z","kind":"flash","reason":"turn/end","mode":"until-foreground","result":{"ok":true,"mode":"until-foreground","reason":"foreground","elapsedMs":10648,"uid":3,"size":16,"dpi":96,"style":"blink","toggles":23,"failed":0}}
+```
+
+`$DSH_HOME/log/dsh-done-flash.log`, one JSON object per line.
+
+## Troubleshooting
+
+**Nothing flashes.** Check the log first: `loaded` means the plugin runs, `flash` means it fired. `error: "icon-path-missing"` means `iconPath` could not be resolved — set it by hand. `uids: []` means the helper found no tray icon: the app tray may have been re-created, or DSH is running elevated/under another user.
+
+**It flashes with the window in front.** Your foreground window is not considered the DSH main window (for example a fullscreen game or an elevated window). Set `onlyWhenBackground: false` to always flash, or ignore it.
+
+**The icon got stuck highlighted.** `restoreOnLoad` repairs that at the next start; or `node -e "..."` — simpler: remove and re-add the bundle.
+
+**Antivirus complains about PowerShell.** The helper only calls `shell32`/`user32` exports this Windows version already ships. If your policy blocks PowerShell scripts, the plugin cannot flash (there is no Node-only path to another process's tray icon).
+
+## License
+
+MIT.
