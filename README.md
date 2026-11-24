@@ -93,12 +93,12 @@ dsh plugin --profile desktop add link:F:\path\to\dsh-done-flash
 
 1. 宿主进程里收到 `session/event`，`type === 'turn/end'`。
 2. 插件以隐藏方式启动 `lib/tray-flash.ps1`，把应用的 `resources/tray.ico` 传进去。
-3. 助手脚本找到桌面进程的 Electron 托盘消息窗口（`Electron_NotifyIconHostWindow`），用 `Shell_NotifyIconGetRect` 定位鲸鱼的 `uID`，再从 `tray.ico` 里按偏移取出 PNG 帧（应用把 7 个尺寸全存成了 PNG）。
+3. 助手脚本找到桌面进程的 Electron 托盘消息窗口（`Electron_NotifyIconHostWindow`）——**只认自己进程链上的那一个**：Qoder、VS Code 等 Electron 应用也有同名窗口，按类名取第一个就会画到别人图标上。然后用 `Shell_NotifyIconGetRect` 定位鲸鱼的 `uID`，再从 `tray.ico` 里按偏移取出 PNG 帧（应用把 7 个尺寸全存成了 PNG）。
 4. 按**托盘槽位的实际尺寸**选帧（200% 缩放下就是 32px 那帧，而不是把 16px 放大），合成"消失"帧并交替下发。
 5. 每一拍都用 `GetForegroundWindow` 判断前台窗口是不是应用自己的窗口（或标题含 `DeepSeek Harness` 的浏览器标签）：是就立刻停止；否则继续闪。`maxDurationMs` 只在设了兜底上限时才参与。
 6. 退出前一定恢复原图标；加载时也会先恢复一次，防止上次被中断留下异常帧。
 
-不碰任何 Electron API：托盘图标归主进程所有，插件走的是系统通知区自己的那套消息，不 patch 任何文件、不往渲染进程注入代码。同一时刻只允许一个助手在闪（全局互斥量），不会出现两个进程互相抢图标。
+不碰任何 Electron API：托盘图标归主进程所有，插件走的是系统通知区自己的那套消息，不 patch 任何文件、不往渲染进程注入代码。同一时刻只允许一个助手在闪（全局互斥量），不会出现两个进程互相抢图标。助手找不到"属于本应用进程链"的托盘窗口时直接放弃（`tray-host-not-found`），绝不猜一个同名窗口来画。
 
 ## 文件
 
@@ -132,6 +132,8 @@ node test/plugin.test.mjs
 **窗口在前台也闪。** 你的前台窗口不被判定为 DSH 主窗口（例如全屏游戏、提权窗口）。不想管就设 `onlyWhenBackground: false`，或者忽略。
 
 **图标卡在消失状态。** 插件会在下次加载时自动恢复（`restore-on-load`）；助手被中断时也会主动复原（`restore-after-abort`）。若仍有残留，卸载重装即可。
+
+**另一个应用的托盘图标变成了鲸鱼。** 0.1.0 的 bug：助手按类名取第一个 `Electron_NotifyIconHostWindow`，同时开着 Qoder、VS Code 这类 Electron 应用时会选中它们。0.1.1 起只认本应用进程链上的窗口，找不到就放弃。已经被画错图标的应用，重启一次即可恢复。
 
 **杀软报警。** 助手只调用本系统自带的 `shell32`/`user32` 导出函数。如果策略禁止执行 PowerShell 脚本，插件无法工作——跨进程改别人的托盘图标没有纯 Node 的路子。
 

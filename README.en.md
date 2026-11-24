@@ -93,12 +93,12 @@ Only `ring`, `badge` and `invert` use `accent` (`#22C55E` green = finished; `#F5
 
 1. `session/event` with `type === 'turn/end'` fires in the host process.
 2. The plugin spawns `lib/tray-flash.ps1` hidden, passing the app's `resources/tray.ico`.
-3. The helper finds the Electron tray message window (`Electron_NotifyIconHostWindow`) that belongs to the desktop process, locates the whale's `uID` with `Shell_NotifyIconGetRect`, and reads the PNG frames out of `tray.ico` (the app stores all seven as PNG).
+3. The helper finds the Electron tray message window (`Electron_NotifyIconHostWindow`) **that belongs to its own process chain** — Qoder, VS Code and other Electron apps expose a window with the same class name, so "the first one on the desktop" is the wrong app. It then locates the whale's `uID` with `Shell_NotifyIconGetRect` and reads the PNG frames out of `tray.ico` (the app stores all seven as PNG).
 4. It composites a highlighted twin at the exact DPI-matched size and alternates the two with `Shell_NotifyIcon(NIM_MODIFY)`.
 5. In the default `untilForeground` mode it checks `GetForegroundWindow` on every tick and stops the moment the app's own window — or a window titled `DeepSeek Harness` — is in front; otherwise it stops after `durationMs` (or `maxDurationMs`).
 6. It always restores the original icon on the way out — plus once at load, in case a previous run was killed mid-flash.
 
-No Electron API is touched: the tray icon is owned by the main process, and the plugin talks to the shell the same way the shell's own notification area does. Nothing is patched, nothing is injected into the renderer. Only one helper may run at a time (a global mutex), so two flashes can never fight over the icon.
+No Electron API is touched: the tray icon is owned by the main process, and the plugin talks to the shell the same way the shell's own notification area does. Nothing is patched, nothing is injected into the renderer. Only one helper may run at a time (a global mutex), so two flashes can never fight over the icon. If the helper cannot find a tray window inside its own process chain it gives up (`tray-host-not-found`) instead of guessing a same-named window.
 
 ## Files
 
@@ -132,6 +132,8 @@ The test mounts the plugin on a fake context, emits `step/end` (must be ignored)
 **It flashes with the window in front.** Your foreground window is not considered the DSH main window (for example a fullscreen game or an elevated window). Set `onlyWhenBackground: false` to always flash, or ignore it.
 
 **The icon got stuck highlighted.** `restoreOnLoad` repairs that at the next start; or `node -e "..."` — simpler: remove and re-add the bundle.
+
+**Another app's tray icon turned into the whale.** A 0.1.0 bug: the helper used the first `Electron_NotifyIconHostWindow` on the desktop, which is Qoder's or VS Code's when one of them is running. Since 0.1.1 it only accepts a tray window inside its own process chain (and reports `tray-host-not-found` instead of guessing). Restart the app whose icon was overwritten to get it back.
 
 **Antivirus complains about PowerShell.** The helper only calls `shell32`/`user32` exports this Windows version already ships. If your policy blocks PowerShell scripts, the plugin cannot flash (there is no Node-only path to another process's tray icon).
 

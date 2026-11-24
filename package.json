@@ -1,6 +1,6 @@
 {
   "name": "dsh-done-flash",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Flash the DeepSeek Harness tray whale when a task finishes while the app is in the background. Windows tray attention without a popup.",
   "keywords": [
     "dsh-plugin",

@@ -145,9 +145,79 @@ public static class DoneFlashTray {
     return found;
   }
 
-  public static IntPtr FindTrayHostAny() {
+  // Other Electron apps (Qoder, VS Code, ...) own a window with the very same
+  // class name, so "the first tray host" is the wrong app as soon as one of
+  // them runs. The helper is spawned by the DSH host, which the desktop app
+  // spawned: walking our own parent chain gives exactly one answer.
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+  public struct PROCESSENTRY32W {
+    public uint dwSize;
+    public uint cntUsage;
+    public uint th32ProcessID;
+    public IntPtr th32DefaultHeapID;
+    public uint th32ModuleID;
+    public uint cntThreads;
+    public uint th32ParentProcessID;
+    public int pcPriClassBase;
+    public uint dwFlags;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+    public string szExeFile;
+  }
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint pid);
+
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  private static extern bool Process32First(IntPtr snapshot, ref PROCESSENTRY32W entry);
+
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  private static extern bool Process32Next(IntPtr snapshot, ref PROCESSENTRY32W entry);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern bool CloseHandle(IntPtr handle);
+
+  [DllImport("kernel32.dll")]
+  private static extern uint GetCurrentProcessId();
+
+  public static uint[] AncestorPids() {
+    Dictionary<uint, uint> parents = new Dictionary<uint, uint>();
+    IntPtr snapshot = CreateToolhelp32Snapshot(0x2, 0); // TH32CS_SNAPPROCESS
+    if (snapshot != IntPtr.Zero) {
+      PROCESSENTRY32W entry = new PROCESSENTRY32W();
+      entry.dwSize = (uint)Marshal.SizeOf(typeof(PROCESSENTRY32W));
+      if (Process32First(snapshot, ref entry)) {
+        do {
+          parents[entry.th32ProcessID] = entry.th32ParentProcessID;
+        } while (Process32Next(snapshot, ref entry));
+      }
+      CloseHandle(snapshot);
+    }
+    List<uint> chain = new List<uint>();
+    uint pid = GetCurrentProcessId();
+    for (int i = 0; i < 32; i++) {
+      uint parent;
+      if (!parents.TryGetValue(pid, out parent)) break;
+      if (parent == 0 || parent == pid) break;
+      chain.Add(parent);
+      pid = parent;
+    }
+    return chain.ToArray();
+  }
+
+  // Preferred: the tray window owned by the given pid (the desktop main
+  // process). Then: any tray window owned by one of our ancestors. Never:
+  // "any tray window on the desktop".
+  public static IntPtr FindTrayHostForChain(int mainPid) {
+    if (mainPid > 0) {
+      IntPtr direct = FindTrayHostByPid(mainPid);
+      if (direct != IntPtr.Zero) return direct;
+    }
+    List<uint> chain = new List<uint>(AncestorPids());
     IntPtr found = IntPtr.Zero;
     EnumWindows(delegate(IntPtr hWnd, IntPtr lParam) {
+      uint owner;
+      GetWindowThreadProcessId(hWnd, out owner);
+      if (!chain.Contains(owner)) return true;
       StringBuilder sb = new StringBuilder(256);
       GetClassName(hWnd, sb, sb.Capacity);
       if (sb.ToString() == "Electron_NotifyIconHostWindow") { found = hWnd; return false; }
@@ -227,9 +297,11 @@ public static class DoneFlashTray {
 "@
 
   # ---- 1. tray host window -------------------------------------------------
-  $hwnd = [DoneFlashTray]::FindTrayHostAny()
+  # Only the tray window of this app's process chain may be touched: a second
+  # Electron app (Qoder, VS Code, ...) exposes an identically named window.
+  $hwnd = [DoneFlashTray]::FindTrayHostForChain($MainPid)
   if ($hwnd -eq [IntPtr]::Zero) {
-    Write-Result @{ ok = $false; error = 'tray-host-not-found' }
+    Write-Result @{ ok = $false; error = 'tray-host-not-found'; mainPid = $MainPid; ancestors = ([DoneFlashTray]::AncestorPids() -join ',') }
     exit 3
   }
 
@@ -237,6 +309,17 @@ public static class DoneFlashTray {
   # exactly the process whose windows count as "the app is in front".
   $ownerPid = [uint32]0
   [void][DoneFlashTray]::GetWindowThreadProcessId($hwnd, [ref]$ownerPid)
+  $hostPid = [int]$ownerPid
+
+  # Belt and braces: if the caller named the app process, refuse to drive any
+  # other window even when the chain lookup somehow landed elsewhere.
+  if ($MainPid -gt 0 -and $hostPid -ne $MainPid) {
+    $chain = [DoneFlashTray]::AncestorPids()
+    if ($chain -notcontains [uint32]$hostPid) {
+      Write-Result @{ ok = $false; error = 'tray-host-mismatch'; mainPid = $MainPid; hostPid = $hostPid }
+      exit 4
+    }
+  }
 
   if ($RequireBackground) {
     $fgPid = [DoneFlashTray]::ForegroundPid()
